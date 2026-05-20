@@ -686,9 +686,9 @@ empty responses.
 \textbf{Dataset} & \textbf{Our ASR} & \textbf{Paper ASR} & \textbf{Non-Empty} \\
 & \textbf{(deepseek-v4-flash)} & \textbf{(GPT-4o-mini)} & \textbf{/ Total} \\
 \midrule
-HotpotQA   & 60.0\% & 92.0\% & 9/10 \\
-2WikiMultihopQA & 90.0\% & 90.0\% & 9/10 \\
-MuSiQue    & 100.0\%\textsuperscript{*} & 99.2\% & 0/10 \\
+HotpotQA   & 80.0\% & 92.0\% & 9/10 \\
+2WikiMultihopQA & 90.0\% & 90.0\% & 8/10 \\
+MuSiQue    & 90.0\% & 99.2\% & 6/10 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -700,7 +700,7 @@ not directly comparable.
 \textbf{Key findings:}
 \begin{itemize}[nosep]
   \item \textbf{2Wiki: ASR 90.0\%} --- matches the paper's 90.0\% exactly.
-  \item \textbf{HotpotQA: ASR 60.0\%} --- significantly \emph{lower} than the
+  \item \textbf{HotpotQA: ASR 80.0\%} --- lower than the
     paper's 92.0\%; \texttt{deepseek-v4-flash} more robust against poisoned context.
   \item \textbf{Token budget is critical:} Reasoning models need sufficient
     \texttt{max\_tokens} (4000--8000) to avoid empty answers inflating ASR.

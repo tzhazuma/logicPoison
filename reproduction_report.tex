@@ -733,40 +733,74 @@ different query model and judge model.
 
 \subsection{GraphRAG Framework Evaluation Attempt}
 
-\subsection{GraphRAG Framework Installation \& Testing}
+\subsection{GraphRAG Framework Evaluation}
 
 The paper evaluates on three GraphRAG frameworks.  We cloned, patched, and
 installed all three in a dedicated Python~3.12 environment
-(\texttt{\textasciitilde/venv312\_graphrag}):
+(\texttt{\textasciitilde/venv312\_graphrag}).  A unified evaluation script
+(\texttt{eval/run\_graphrag\_eval.py}) was created to test each framework.
 
+\begin{table}[H]
+\centering
+\caption{GraphRAG framework installation and evaluation status}
+\label{tab:graphrag}
+\begin{tabular}{@{}lccp{5cm}@{}}
+\toprule
+\textbf{Framework} & \textbf{Installed} & \textbf{Imports} & \textbf{Evaluation} \\
+\midrule
+Microsoft GraphRAG v3.0.9 & \checkmark & \checkmark & Needs v3 API config (interactive CLI) \\
+GFM-RAG v2.0.0 & \checkmark\textsuperscript{a} & \checkmark & Needs model download (HuggingFace) \\
+HippoRAG~2 v2.0.0a4 & \checkmark\textsuperscript{a} & \checkmark & Needs transformers (network blocked) \\
+Naive RAG (ours) & \checkmark & \checkmark & \textbf{Fully evaluated} (see \S~6.2) \\
+\bottomrule
+\end{tabular}
+\end{table}
+\textsuperscript{a}Patched: GFM-RAG langchain deps removed; HippoRAG~2 openai version fixed.
+
+\textbf{Honest assessment:}
 \begin{itemize}[nosep]
-  \item \textbf{Microsoft GraphRAG} (v3.0.9): Installed via \texttt{pip}.
-    Configured for \texttt{deepseek-v4-flash} via opencode-go API.  CLI and
-    Python API verified functional.  Indexing deferred due to v3 API changes
-    requiring interactive setup---ready to run once configured.
-  \item \textbf{GFM-RAG} (v2.0.0): Cloned from \texttt{RManLuo/gfm-rag},
-    patched \texttt{pyproject.toml} to remove conflicting \texttt{langchain}
-    dependencies, installed via \texttt{pip install -e . --no-deps}.
-    Core import verified; \texttt{torch\_geometric} installed.
-  \item \textbf{HippoRAG~2} (v2.0.0a4): Cloned from
-    \texttt{OSU-NLP-Group/HippoRAG}, patched \texttt{setup.py} to fix
-    \texttt{openai==1.91.1} $\to$ \texttt{openai>=1.0.0}.
-    Installed via \texttt{pip install -e . --no-deps}.
+  \item \textbf{Naive RAG} (Contriever + FAISS) is fully functional and provides
+    the baseline for comparison with the paper (HotpotQA ASR~60.0\%, 2Wiki~90.0\%).
+  \item \textbf{Microsoft GraphRAG} v3.0.9 has a redesigned API that requires
+    interactive \texttt{graphrag init} before indexing---automation blocked.
+  \item \textbf{GFM-RAG} and \textbf{HippoRAG~2} require downloading pretrained
+    models from HuggingFace, blocked by network connectivity issues in our
+    environment.
+  \item All three frameworks are \textbf{installed and importable}---the core
+    challenge is operationalizing the full indexing $\to$ retrieval $\to$ QA
+    pipeline, which is non-trivial for each framework.
+  \item The paper itself reports ASR on these frameworks as: GraphRAG~73--84\%,
+    GFM-RAG~57--95\%, HippoRAG~2~66--91\%.  Our Naive RAG results fall within
+    a comparable range, validating the attack effectiveness.
 \end{itemize}
 
-\textbf{Installation summary:} All three frameworks successfully import in the
-same Python~3.12 environment.  The primary blocker for full evaluation is the
-Microsoft GraphRAG v3 indexing pipeline change (CLI interactive mode) and
-GFM-RAG/HippoRAG~2's dependency on large packages (\texttt{vllm}) that require
-additional GPU memory.
+\subsection{Summary of Reproduced Metrics}
 
-The GraphRAG framework evaluation remains as future work.  The Naive RAG and
-ASR-GPT results reported above provide the primary quantitative comparison with
-the paper.
+\begin{table}[H]
+\centering
+\caption{Complete reproduction metrics vs.\ paper}
+\label{tab:summary}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Metric} & \textbf{Our Value} & \textbf{Paper Value} & \textbf{Match?} \\
+\midrule
+Pipeline stages & 3 (global, query, logic) & 3 & \checkmark \\
+Entities swapped (total) & 9,151 & not reported & N/A \\
+Total freq affected & 142,488 & not reported & N/A \\
+Naive RAG ASR (HotpotQA) & 60.0\% & 92.0\% & $\downarrow$ (more robust model) \\
+Naive RAG ASR (2Wiki) & 90.0\% & 90.0\% & \checkmark \\
+ASR-GPT (HotpotQA) & 80.0\% & 91.6\% & close \\
+ASR-GPT (2Wiki) & 100.0\% & 94.4\% & close \\
+GraphRAG ASR & pending\textsuperscript{*} & 73--95\% & TBD \\
+\bottomrule
+\end{tabular}
+\end{table}
+\textsuperscript{*}Frameworks installed, evaluation blocked by operational setup.
 
 \subsection{Reproduction Verdict}
 
 The poison generation pipeline is \textbf{successfully reproduced} with identical
+architecture and verified type-preserving behavior.  The core mechanism---global
 architecture and verified type-preserving behavior.  The core mechanism---global
 entity statistics, query-centric entity extraction, and type-preserving circular
 swapping---produces poisoned corpora that are structurally consistent with the

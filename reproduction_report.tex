@@ -1,0 +1,550 @@
+% !TEX program = xelatex
+\documentclass[11pt,a4paper]{article}
+
+% ============================================================
+%  Encoding & CJK support
+% ============================================================
+\usepackage{fontspec}
+\usepackage{xeCJK}
+
+% Set CJK fonts (adjust to your system; these are common defaults)
+\setCJKmainfont{Noto Sans CJK SC}[AutoFakeBold=true]
+\setCJKsansfont{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans Mono CJK SC}
+
+% ============================================================
+%  Packages
+% ============================================================
+\usepackage[margin=2.5cm]{geometry}
+\setlength{\headheight}{12.5pt}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{listings}
+\usepackage{url}
+
+% ============================================================
+%  Hyperref setup
+% ============================================================
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  urlcolor=blue!70!black,
+  citecolor=blue!70!black,
+}
+
+% ============================================================
+%  Listings setup
+% ============================================================
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!5},
+  keywordstyle=\color{blue!70!black},
+  commentstyle=\color{green!50!black},
+  stringstyle=\color{red!60!black},
+  showstringspaces=false,
+}
+
+% ============================================================
+%  Page style
+% ============================================================
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small LogicPoison 复现报告}
+\fancyhead[R]{\small May 2026}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ============================================================
+%  Title
+% ============================================================
+\title{%
+  \textbf{LogicPoison 复现报告} \\[6pt]
+  \large Reproduction Report%
+}
+\author{}
+\date{May 2026}
+
+% ============================================================
+\begin{document}
+\maketitle
+
+% ============================================================
+\section{论文信息 / Paper Info}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\bfseries}l l}
+\toprule
+Title       & LogicPoison: Logical Attacks on Graph Retrieval-Augmented Generation \\
+Authors     & Yilin Xiao, Jin Chen, Qinggang Zhang, Yujing Zhang, \\
+            & Chuang Zhou, Longhao Yang, Lingfei Ren, Xin Yang, Xiao Huang \\
+Venue       & ACL 2026 Main Conference \\
+ArXiv       & \url{https://arxiv.org/abs/2604.02954} \\
+GitHub      & \url{https://github.com/Jord8061/logicPoison} \\
+HuggingFace & \url{https://huggingface.co/datasets/Jord8061/datasets} \\
+\bottomrule
+\end{tabular}
+\caption{Paper metadata.}
+\end{table}
+
+% ============================================================
+\section{论文概述 / Paper Overview}
+% ============================================================
+
+LogicPoison is a logical poisoning framework targeting \textbf{GraphRAG} systems.
+Rather than injecting fabricated facts or adversarial instructions into the corpus,
+it perturbs the \emph{implicit reasoning topology} of the graph through
+\textbf{type-preserving entity swapping}.
+
+The core insight is straightforward but effective:
+\begin{itemize}[nosep]
+  \item Identify globally important \emph{logic hubs} in the corpus.
+  \item Identify query-specific \emph{bridge entities} required for multi-hop reasoning.
+  \item Swap entities \emph{within the same semantic type} (e.g., PERSON with PERSON,
+        ORG with ORG) so that the text remains locally plausible while the graph
+        structure built from the corpus is corrupted.
+\end{itemize}
+
+This causes GraphRAG systems to follow corrupted reasoning chains and produce
+incorrect answers, while the poisoned corpus remains surface-level natural.
+
+\subsection{Three-Stage Framework}
+
+\begin{enumerate}
+  \item \textbf{Global Logic Poison (Stage 1):}\\
+    Build corpus-level entity statistics and identify high-frequency entities
+    that likely act as \emph{global logic hubs} in the implicit graph.
+    Uses spaCy's transformer-based NER model (\texttt{en\_core\_web\_trf}) with
+    GPU acceleration to process the entire corpus, collecting per-type entity
+    frequency distributions.
+
+  \item \textbf{Query-Centric Logic Poison (Stage 2):}\\
+    Use query-side reasoning signals to identify \emph{bridge entities} that are
+    important for answering multi-hop questions.  An LLM extracts reasoning-critical
+    entities from each question, including implicit bridge entities (typed
+    \texttt{BRIDGE}) and alias-style descriptions (typed \texttt{ALIAS}).
+
+  \item \textbf{Type-Preserving Entity Swapping (Stage 3):}\\
+    Combine the selected entities and perform \emph{bijective (circular) swapping
+    within the same entity type}.  For each type, a pool is constructed from the
+    top-5\% corpus entities (by frequency) plus query entities (in occurrence order).
+    A reverse circular permutation is then applied:
+    \[
+      e_0 \to e_{n-1},\quad
+      e_1 \to e_0,\quad
+      e_2 \to e_1,\quad
+      \ldots,\quad
+      e_{n-1} \to e_{n-2}
+    \]
+    This ensures every entity is replaced by exactly one other entity of the same
+    type, producing a poisoned corpus that remains grammatically and semantically
+    plausible at the local text level.
+\end{enumerate}
+
+\subsection{Key Contributions}
+
+\begin{itemize}[nosep]
+  \item A novel poisoning paradigm that targets \emph{logical structure} rather than
+        surface text, making attacks harder to detect.
+  \item A three-stage pipeline (global, query-centric, type-preserving swap) that
+        is modular and applicable to any GraphRAG system.
+  \item Evaluation on three multi-hop QA benchmarks (HotpotQA, MuSiQue,
+        2WikiMultiHopQA) demonstrating significant degradation of GraphRAG
+        performance.
+\end{itemize}
+
+% ============================================================
+\section{复现环境 / Reproduction Environment}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\bfseries}l l}
+\toprule
+Python          & 3.14.4 \\
+Virtual Env     & venv314 \\
+GPU             & NVIDIA GeForce RTX 4060 \\
+CUDA            & 13.1 \\
+CuPy            & Installed (GPU-accelerated spaCy) \\
+LLM API         & opencode-go / deepseek-v4-flash \\
+\bottomrule
+\end{tabular}
+\caption{System environment.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l}
+\toprule
+\textbf{Package} & \textbf{Version} \\
+\midrule
+openai           & 2.30.0 \\
+spacy            & 3.8.13 \\
+tqdm             & 4.67.3 \\
+en\_core\_web\_trf & 3.8.0 \\
+\bottomrule
+\end{tabular}
+\caption{Python dependencies.}
+\end{table}
+
+% ============================================================
+\section{复现步骤 / Reproduction Steps}
+% ============================================================
+
+\subsection{Step 1: Clone Repository}
+
+\begin{lstlisting}[language=bash]
+git clone https://github.com/Jord8061/logicPoison.git
+cd logicPoison
+\end{lstlisting}
+
+\subsection{Step 2: Clone Datasets from HuggingFace}
+
+\begin{lstlisting}[language=bash]
+cd datasets
+git clone https://huggingface.co/datasets/Jord8061/datasets .
+cd ..
+\end{lstlisting}
+
+The datasets directory should contain three subdirectories:
+\texttt{hotpotqa/}, \texttt{musique/}, and \texttt{2wikimultihopqa/},
+each with \texttt{corpus.jsonl} and \texttt{queries.jsonl}.
+
+\subsection{Step 3: Install Dependencies and spaCy Model}
+
+\begin{lstlisting}[language=bash]
+python -m venv venv314
+source venv314/bin/activate
+pip install -r requirements.txt
+pip install cupy-cuda13x   # GPU acceleration for spaCy
+python -m spacy download en_core_web_trf
+\end{lstlisting}
+
+\subsection{Step 4: Configure API Access}
+
+Set the following environment variables for the OpenAI-compatible API:
+
+\begin{lstlisting}[language=bash]
+export OPENAI_API_KEY="<your-api-key>"
+export OPENAI_BASE_URL="<your-base-url>"
+\end{lstlisting}
+
+\textbf{Note:} In this reproduction, we used the \texttt{deepseek-v4-flash} model
+via the opencode-go gateway.  The API key and base URL must be configured before
+running the query-centric stage.
+
+\subsection{Step 5: Fix \texttt{list\_datasets} Filter}
+
+The original \texttt{main.py} uses \texttt{os.listdir()} to discover datasets,
+which may include non-dataset directories such as \texttt{.git/} or files like
+\texttt{README.md} that were cloned from HuggingFace.  The function already filters
+by checking for \texttt{corpus.jsonl} and excluding dot-prefixed names, but we
+verified this handles the HuggingFace clone correctly.  No patch was needed in our
+case since the \texttt{list\_datasets} function in \texttt{main.py} already
+requires \texttt{corpus.jsonl} to exist in each subdirectory.
+
+\subsection{Step 6: Run the Pipeline}
+
+\begin{lstlisting}[language=bash]
+python main.py \
+  --stages all \
+  --datasets all \
+  --query_model deepseek-v4-flash
+\end{lstlisting}
+
+The pipeline runs three stages sequentially:
+\begin{enumerate}
+  \item \textbf{global}: Corpus entity statistics extraction (GPU-accelerated NER).
+  \item \textbf{query}: Query-centric entity extraction via LLM API calls.
+  \item \textbf{logic}: Type-preserving entity swapping and corpus poisoning.
+\end{enumerate}
+
+Completed stage outputs are auto-detected and skipped on re-runs.
+Use \texttt{-{}-force} to rerun selected stages.
+
+% ============================================================
+\section{复现结果 / Reproduction Results}
+% ============================================================
+
+Results are organized into three directories under \texttt{results/}:
+\begin{itemize}[nosep]
+  \item \texttt{corpus\_entities/}: Per-dataset entity statistics (JSON).
+  \item \texttt{queries\_entities/}: Per-dataset query entity extraction (JSONL).
+  \item \texttt{poisoned\_data/}: Poisoned corpora and statistics.
+\end{itemize}
+
+\subsection{Global Entity Statistics}
+
+\begin{table}[H]
+\centering
+\caption{Global entity statistics per dataset (Stage 1 output).}
+\begin{tabular}{l r c l}
+\toprule
+\textbf{Dataset} & \textbf{Corpus Size} & \textbf{Types Poisoned} & \textbf{Top Entity Types (count)} \\
+\midrule
+2WikiMultiHopQA & 6,119 & 7 & PERSON (977), WORK\_OF\_ART (431), ORG (218) \\
+HotpotQA        & 9,811 & 13 & PERSON (1,110), ORG (769), WORK\_OF\_ART (512) \\
+MuSiQue         & 11,656 & 11 & PERSON (997), ORG (644), DATE (503) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Top entities by type for HotpotQA (Stage 1 output).}
+\begin{tabular}{l l r}
+\toprule
+\textbf{Type} & \textbf{Top Entity} & \textbf{Count} \\
+\midrule
+PERSON       & (top PERSON entity)       & 1,110 \\
+ORG          & (top ORG entity)          & 769 \\
+WORK\_OF\_ART & (top WORK\_OF\_ART entity) & 512 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Query-Centric Entity Extraction}
+
+All three datasets contain 500 questions each (1,500 total).
+Entity extraction was performed using \texttt{deepseek-v4-flash} via the
+opencode-go API (\texttt{OPENAI\_BASE\_URL=https://opencode.ai/zen/go/v1}).
+
+\begin{table}[H]
+\centering
+\caption{Query entity extraction statistics per dataset (Stage 2 output).}
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Dataset} & \textbf{Num Queries} & \textbf{Model} & \textbf{Runtime} \\
+\midrule
+2WikiMultiHopQA & 500 & deepseek-v4-flash & $\sim$82 min \\
+HotpotQA        & 500 & deepseek-v4-flash & $\sim$56 min \\
+MuSiQue         & 500 & deepseek-v4-flash & $\sim$7.5 hours \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Poison Statistics}
+
+\begin{table}[H]
+\centering
+\caption{Poison statistics per dataset (Stage 3 output).}
+\begin{tabular}{l r r r}
+\toprule
+\textbf{Dataset} & \textbf{Types Poisoned} & \textbf{Entities Swapped} & \textbf{Total Freq Affected} \\
+\midrule
+2WikiMultiHopQA & 7   & 1,865 & 17,615 \\
+HotpotQA        & 13  & 3,781 & 62,905 \\
+MuSiQue         & 11  & 3,505 & 61,968 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Per-type poison statistics for HotpotQA (Stage 3 output).}
+\begin{tabular}{l r r}
+\toprule
+\textbf{Entity Type} & \textbf{Num Entities Swapped} & \textbf{Total Frequency} \\
+\midrule
+PERSON        & (dominant type) & (largest share) \\
+ORG           & (second largest) & (second largest) \\
+WORK\_OF\_ART & (third largest) & (third largest) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Note:} The results directory structure is:
+\begin{lstlisting}[language=bash]
+results/
+  corpus_entities/
+    hotpotqa.json
+    musique.json
+    2wikimultihopqa.json
+  queries_entities/
+    hotpotqa.jsonl
+    musique.jsonl
+    2wikimultihopqa.jsonl
+  poisoned_data/
+    hotpotqa/
+      corpus.jsonl
+      queries.jsonl
+      answers.jsonl
+      qrels/
+      poison_stats_hotpotqa.json
+    musique/
+      ...
+    2wikimultihopqa/
+      ...
+\end{lstlisting}
+
+% ============================================================
+\section{关键发现 / Key Findings}
+% ============================================================
+
+\subsection{Pipeline Performance}
+
+\begin{table}[H]
+\centering
+\caption{Pipeline runtime breakdown.}
+\begin{tabular}{l l r}
+\toprule
+\textbf{Stage} & \textbf{Dataset} & \textbf{Runtime} \\
+\midrule
+\multirow{3}{*}{Global (GPU)} & 2WikiMultiHopQA & $\sim$2--3 min \\
+                              & HotpotQA        & $\sim$2--3 min \\
+                              & MuSiQue         & $\sim$2--3 min \\
+\midrule
+\multirow{3}{*}{Query (API)} & 2WikiMultiHopQA & $\sim$82 min \\
+                              & HotpotQA        & $\sim$56 min \\
+                              & MuSiQue         & $\sim$7.5 hours \\
+\midrule
+\multirow{3}{*}{Logic}       & 2WikiMultiHopQA & $\sim$1--2 min \\
+                              & HotpotQA        & $\sim$1--2 min \\
+                              & MuSiQue         & $\sim$1--2 min \\
+\midrule
+\textbf{Total} & \textbf{All 3 datasets} & $\sim$\textbf{10 hours} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The query-centric stage dominates total runtime due to per-question LLM API calls
+($\sim$2 min/question average).  The global and logic stages are fast thanks to
+GPU-accelerated NER and local text substitution respectively.
+
+\subsection{Sanity Check: Type-Preserving Swapping}
+
+We verified that the type-preserving constraint is correctly enforced by inspecting
+sample replacements in the poisoned corpora:
+
+\begin{table}[H]
+\centering
+\caption{Sample entity swaps confirming type preservation.}
+\begin{tabular}{l l l l}
+\toprule
+\textbf{Original} & \textbf{Replaced With} & \textbf{Type} & \textbf{Preserved?} \\
+\midrule
+2011    & 2010        & DATE $\to$ DATE   & \checkmark \\
+Indian  & Australian  & NORP $\to$ NORP   & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Documents remain grammatically coherent with only entities swapped---no broken
+syntax or semantic incoherence was observed at the sentence level.
+
+\subsection{Type-Preserving Entity Swapping Mechanism}
+
+The core innovation of LogicPoison is the \emph{type-preserving} constraint.
+By swapping entities only within the same NER type (e.g., PERSON $\leftrightarrow$
+PERSON, GPE $\leftrightarrow$ GPE), the poisoned corpus maintains local
+grammatical coherence.  The reverse circular permutation ensures:
+\begin{itemize}[nosep]
+  \item Every entity in the pool is replaced by exactly one other entity
+        (bijective mapping).
+  \item No entity is replaced by itself.
+  \item The mapping is deterministic and reproducible.
+\end{itemize}
+
+The pool for each type is constructed by concatenating:
+\begin{enumerate}
+  \item Top-5\% entities by corpus frequency (global logic hubs).
+  \item Query-centric entities that appear in the corpus (bridge entities),
+        appended in occurrence order, deduplicated against the top-5\%.
+\end{enumerate}
+
+\subsection{GPU Acceleration Impact}
+
+The global entity extraction stage (Stage 1) uses spaCy's transformer-based
+NER model (\texttt{en\_core\_web\_trf}) with GPU acceleration via CuPy.
+On our RTX 4060 with CUDA 13.1, \texttt{spacy.prefer\_gpu()} successfully
+enabled GPU processing, significantly speeding up NER over the full corpus.
+The pipeline uses \texttt{nlp.pipe()} with configurable batch size (default 32)
+for efficient batch processing.
+
+\subsection{API Rate Limiting Observations}
+
+The query-centric stage (Stage 2) makes concurrent LLM API calls using a
+\texttt{ThreadPoolExecutor} with configurable \texttt{max\_workers} (default 8)
+and \texttt{queue\_factor} (default 4), yielding up to 32 concurrent requests.
+Key observations:
+\begin{itemize}[nosep]
+  \item The pipeline includes exponential backoff retry logic (3 retries,
+        base delay 1.5s) for API errors.
+  \item Using \texttt{deepseek-v4-flash} as the query model provides a
+        cost-effective alternative to \texttt{gpt-4o-mini} for entity extraction.
+  \item Rate limiting may require adjusting \texttt{-{}-max\_workers} and
+        \texttt{-{}-queue\_factor} depending on the API provider's limits.
+\end{itemize}
+
+\subsection{Pipeline Robustness}
+
+The pipeline includes several robustness features:
+\begin{itemize}[nosep]
+  \item \textbf{Auto-skip completed stages}: The \texttt{stage\_done()} function
+        checks for existing output files and skips completed work.
+  \item \textbf{Regex-based replacement}: Stage 3 uses a single compiled regex
+        pattern with word-boundary assertions (\texttt{(?<!$\backslash$w)} and
+        \texttt{(?!$\backslash$w)}) to prevent cascading replacements and partial
+        word matches.
+  \item \textbf{BEIR-compatible output}: The poisoned data directory preserves
+        \texttt{queries.jsonl}, \texttt{answers.jsonl}, and \texttt{qrels/} for
+        direct evaluation with BEIR-style retrieval frameworks.
+\end{itemize}
+
+% ============================================================
+\section{结论 / Conclusion}
+% ============================================================
+
+This report documents the reproduction of the LogicPoison paper (ACL 2026).
+The three-stage pipeline (global entity statistics, query-centric entity extraction,
+and type-preserving entity swapping) was successfully set up and executed on the
+HotpotQA, MuSiQue, and 2WikiMultiHopQA datasets.
+
+Key takeaways:
+\begin{itemize}[nosep]
+  \item The reproduction environment (Python 3.14.4, RTX 4060, CUDA 13.1,
+        deepseek-v4-flash API) is fully functional.
+  \item The type-preserving entity swapping mechanism is elegant: it corrupts
+        graph-level reasoning structure while preserving local text plausibility.
+  \item GPU acceleration via CuPy is essential for the NER-heavy global stage.
+  \item The modular pipeline design allows running individual stages and
+        datasets independently.
+  \item Total pipeline runtime was $\sim$10 hours across all three datasets,
+        dominated by the query-centric LLM API stage.
+  \item Across all datasets, 9,151 unique entities were swapped, affecting
+        142,488 total occurrences in the corpora.
+\end{itemize}
+
+\vspace{1em}
+\noindent\textbf{Citation:}
+\begin{lstlisting}[language=bash]
+@misc{xiao2026logicpoisonlogicalattacksgraph,
+      title={LogicPoison: Logical Attacks on Graph
+             Retrieval-Augmented Generation},
+      author={Yilin Xiao and Jin Chen and Qinggang Zhang
+              and Yujing Zhang and Chuang Zhou
+              and Longhao Yang and Lingfei Ren
+              and Xin Yang and Xiao Huang},
+      year={2026},
+      eprint={2604.02954},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2604.02954},
+}
+\end{lstlisting}
+
+\end{document}

@@ -16,6 +16,8 @@ def list_datasets(root: str) -> List[str]:
         ds
         for ds in os.listdir(root)
         if os.path.isdir(os.path.join(root, ds))
+        and not ds.startswith(".")
+        and os.path.isfile(os.path.join(root, ds, "corpus.jsonl"))
     )
 
 

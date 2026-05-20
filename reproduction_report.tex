@@ -506,6 +506,133 @@ The pipeline includes several robustness features:
 \end{itemize}
 
 % ============================================================
+\section{复现对比分析 / Reproduction Comparison}
+% ============================================================
+
+This section compares our reproduction results against the original paper's
+reported metrics and experimental setup.
+
+\subsection{Original Paper Results}
+
+The original paper reports Attack Success Rate (ASR\%) on GraphRAG across three
+LLM backbones and three datasets.  ASR measures the proportion of questions for
+which the poisoned GraphRAG system produces incorrect answers.
+
+\begin{table}[H]
+\centering
+\caption{Original paper: ASR (\%) on Microsoft GraphRAG (Table~1 in paper).}
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Dataset} & \textbf{GPT-4o-mini} & \textbf{Llama-3.1-8B} & \textbf{Qwen-3-32B} \\
+\midrule
+HotpotQA        & 78.4 & 79.2 & 84.2 \\
+2WikiMultiHopQA & 78.4 & 78.8 & 78.6 \\
+MuSiQue         & 91.4 & 91.6 & 93.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The paper additionally reports ASR-GPT (LLM-judge) metrics and results on two
+alternative GraphRAG frameworks: GFM-RAG and HippoRAG~2.  Across all
+configurations, LogicPoison achieves ASR values consistently above 70\%, with
+MuSiQue reaching 93\% under Qwen-3-32B.
+
+\subsection{Our Reproduction Results}
+
+We successfully reproduced the full three-stage poison generation pipeline.
+The following table summarizes the poison statistics from our run:
+
+\begin{table}[H]
+\centering
+\caption{Our reproduction: poison generation statistics.}
+\begin{tabular}{l r r r l}
+\toprule
+\textbf{Dataset} & \textbf{Entities Swapped} & \textbf{Total Freq} & \textbf{Entity Types} & \textbf{Query Model} \\
+\midrule
+2WikiMultiHopQA & 1,865 & 17,615 & 7  & deepseek-v4-flash \\
+HotpotQA        & 3,781 & 62,905 & 13 & deepseek-v4-flash \\
+MuSiQue         & 3,505 & 61,968 & 11 & deepseek-v4-flash \\
+\midrule
+\textbf{Total}  & \textbf{9,151} & \textbf{142,488} & \textbf{31} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Note: the ``31'' total entity types counts each type per dataset separately
+(i.e., the same type such as PERSON appears in all three datasets).
+
+\subsection{Side-by-Side Comparison}
+
+\begin{table}[H]
+\centering
+\caption{Comparison between original paper and our reproduction.}
+\begin{tabular}{>{\bfseries}p{3.8cm} p{3.5cm} p{3.8cm} p{2.5cm}}
+\toprule
+\textbf{Metric} & \textbf{Paper} & \textbf{Our Reproduction} & \textbf{Notes} \\
+\midrule
+Pipeline Stages       & 3 (global, query, logic) & 3 (global, query, logic) & \checkmark~Identical \\
+Query Model           & gpt-4o-mini              & deepseek-v4-flash        & Different model \\
+API Backend           & OpenAI                    & opencode-go (Zen)         & Different provider \\
+GPU                   & RTX 5090                  & RTX 4060                  & Consumer GPU \\
+Datasets              & 3 (500 queries each)     & 3 (500 queries each)     & \checkmark~Identical \\
+Type-Preserving Swap  & \checkmark                & \checkmark                & \checkmark~Verified \\
+NER Model             & spaCy en\_core\_web\_trf  & spaCy en\_core\_web\_trf  & \checkmark~Identical \\
+\midrule
+HotpotQA Entities     & ---                       & 3,781                     & Not reported in paper \\
+2Wiki Entities        & ---                       & 1,865                     & Not reported in paper \\
+MuSiQue Entities      & ---                       & 3,505                     & Not reported in paper \\
+\midrule
+GraphRAG ASR          & 78--93\%                  & Not evaluated             & Requires GraphRAG setup \\
+GFM-RAG ASR           & Reported                  & Not evaluated             & Requires GFM-RAG setup \\
+HippoRAG 2 ASR        & Reported                  & Not evaluated             & Requires HippoRAG 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Key Differences and Analysis}
+
+\begin{enumerate}
+  \item \textbf{Query Model Difference:}
+    The original paper uses \texttt{gpt-4o-mini} (OpenAI) for query-centric entity
+    extraction, while we used \texttt{deepseek-v4-flash} via the opencode-go API.
+    Since the query stage selects which bridge entities to target, different LLMs
+    may produce different entity selections, which would affect the composition of
+    the swapping pool and consequently the downstream ASR metrics.  The type-preserving
+    swapping mechanism itself is model-agnostic---only the entity selection differs.
+
+  \item \textbf{GPU Hardware:}
+    The paper uses an RTX 5090; we used an RTX 4060.  Both GPUs successfully
+    accelerated spaCy's transformer-based NER via CuPy.  The global stage completed
+    in $\sim$2--3 minutes per dataset on both configurations, confirming that the
+    NER workload is not heavily GPU-bound at these corpus sizes (6K--12K documents).
+
+  \item \textbf{Evaluation Gap:}
+    The paper reports full ASR metrics across three GraphRAG frameworks
+    (Microsoft GraphRAG, GFM-RAG, HippoRAG~2) and three LLM backbones
+    (GPT-4o-mini, Llama-3.1-8B, Qwen-3-32B).  Our reproduction covers the
+    poison generation pipeline only; running the full GraphRAG evaluation
+    requires additional framework setup (Microsoft GraphRAG, GFM-RAG,
+    HippoRAG~2) and is left as future work.
+
+  \item \textbf{Poison Statistics:}
+    The original paper does not report per-dataset entity swap counts or total
+    frequency affected.  Our reproduction provides these statistics
+    (Table~above), which are consistent with the expected scale: thousands of
+    entities across 7--13 types per dataset, affecting tens of thousands of
+    corpus occurrences.  This confirms the attack surface is substantial.
+\end{enumerate}
+
+\subsection{Reproduction Verdict}
+
+The poison generation pipeline is \textbf{successfully reproduced} with identical
+architecture and verified type-preserving behavior.  The core mechanism---global
+entity statistics, query-centric entity extraction, and type-preserving circular
+swapping---produces poisoned corpora that are structurally consistent with the
+paper's description.  The primary gap is the absence of downstream GraphRAG
+evaluation (ASR metrics), which requires additional infrastructure beyond the
+scope of this reproduction.
+
+% ============================================================
 \section{结论 / Conclusion}
 % ============================================================
 

@@ -622,15 +622,105 @@ HippoRAG 2 ASR        & Reported                  & Not evaluated             & 
     corpus occurrences.  This confirms the attack surface is substantial.
 \end{enumerate}
 
+\subsection{Efficiency Analysis / 效率分析}
+
+Table~\ref{tab:efficiency} compares the runtime of each pipeline stage across
+our reproduction and the original paper's reported estimates.
+
+\begin{table}[H]
+\centering
+\caption{Pipeline runtime comparison (our reproduction vs.\ paper estimates)}
+\label{tab:efficiency}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Stage} & \textbf{2Wiki} & \textbf{HotpotQA} & \textbf{MuSiQue} & \textbf{Paper Est.} \\
+\midrule
+Global (spaCy NER, GPU)  & $\sim$2\,min & $\sim$3\,min & $\sim$3\,min & $\sim$2--3\,min \\
+Query (API extraction)   & $\sim$82\,min & $\sim$56\,min & $\sim$448\,min & $\sim$30--60\,min \\
+Logic (entity swap)      & $\sim$1\,min & $\sim$1\,min & $\sim$1\,min & $\sim$1\,min \\
+\midrule
+Total per dataset        & $\sim$85\,min & $\sim$60\,min & $\sim$452\,min & $\sim$35--65\,min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Corpus sizes for context:}
+\begin{itemize}[nosep]
+  \item 2wikimultihopqa: 6,119 documents
+  \item hotpotqa: 9,811 documents
+  \item musique: 11,656 documents (largest corpus, slowest query stage)
+\end{itemize}
+
+\textbf{Key observations:}
+\begin{enumerate}
+  \item \textbf{Global stage:} The RTX~4060 GPU performed comparably to
+    expectations (30--80\,docs/sec after CuPy warmup).  The transformer-based
+    spaCy NER is not heavily GPU-bound at these corpus sizes.
+  \item \textbf{Query stage bottleneck:} The \texttt{deepseek-v4-flash} API
+    via opencode-go had highly variable latency (1.5--22\,sec/query).
+    MuSiQue took 7.5\,hours primarily due to API rate limiting on the
+    opencode-go free tier.  The original paper used OpenAI's
+    \texttt{gpt-4o-mini} which likely had higher and more consistent throughput.
+  \item \textbf{Logic stage:} Fast local text processing ($\sim$1\,min),
+    consistent with expectations---no API calls involved.
+  \item \textbf{Overall:} The pipeline completed successfully, but API rate
+    limiting is the primary efficiency divergence from the paper.  Using a
+    higher-tier API plan would bring the query stage closer to paper estimates.
+\end{enumerate}
+
+\subsection{Naive RAG Evaluation Attempt}
+
+To compare with the paper's Naive RAG ASR numbers (82--99\%, Table~1), we set up a
+Naive RAG pipeline using \texttt{facebook/contriever} for dense retrieval and
+FAISS for vector search---matching the paper's retrieval configuration.
+
+\textbf{Completed:}
+\begin{itemize}[nosep]
+  \item Contriever model loaded and verified (768-dimensional embeddings)
+  \item FAISS index built for all 3 poisoned corpora (6,119--11,656 vectors each)
+  \item Document retrieval pipeline tested: top-$k$=10 retrieval working correctly
+  \item Evaluation script created at \texttt{eval/run\_naive\_rag.py}
+\end{itemize}
+
+\textbf{Blocked:} LLM answer generation could not be completed due to API credit
+limitations on the opencode-go account.  The retrieval infrastructure is ready;
+resuming the evaluation requires API credits to generate answers for 50--500
+questions per dataset.
+
+\textbf{For reference}, the paper's Naive RAG ASR targets (using GPT-4o-mini) are:
+HotpotQA~92.0\%, 2Wiki~90.0\%, MuSiQue~99.2\%.  With the retrieval pipeline
+verified and the poisoned corpus prepared, running the full evaluation is
+a straightforward extension once API access is restored.
+
 \subsection{Reproduction Verdict}
 
 The poison generation pipeline is \textbf{successfully reproduced} with identical
 architecture and verified type-preserving behavior.  The core mechanism---global
 entity statistics, query-centric entity extraction, and type-preserving circular
 swapping---produces poisoned corpora that are structurally consistent with the
-paper's description.  The primary gap is the absence of downstream GraphRAG
-evaluation (ASR metrics), which requires additional infrastructure beyond the
-scope of this reproduction.
+paper's description.
+
+\textbf{Quantitative comparison with paper:} The paper does not report per-dataset
+entity swap counts, but our statistics (9,151 entities across 31 types, affecting
+142,488 corpus occurrences) are consistent with the attack's intended scale.
+The retrieval infrastructure for ASR evaluation has been built and verified (\S~6.3);
+completing the full ASR comparison requires API credits for LLM answer generation.
+
+\textbf{What was reproduced:}
+\begin{itemize}[nosep]
+  \item All 3 pipeline stages (global, query, logic) across all 3 datasets
+  \item Type-preserving entity swapping mechanism (verified with sanity checks)
+  \item GPU-accelerated NER (CuPy + RTX 4060)
+  \item Dense retrieval pipeline (Contriever + FAISS)
+  \item BEIR-compatible poisoned dataset format
+\end{itemize}
+
+\textbf{Limitations:}
+\begin{itemize}[nosep]
+  \item ASR evaluation blocked by API credit limits
+  \item GraphRAG framework evaluation (Microsoft GraphRAG, GFM-RAG, HippoRAG~2) not run
+  \item Query model differed from paper (deepseek-v4-flash vs.\ gpt-4o-mini)
+\end{itemize}
 
 % ============================================================
 \section{结论 / Conclusion}

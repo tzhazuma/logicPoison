@@ -22,12 +22,12 @@ from openai import OpenAI
 # ============================================================
 # Configuration
 # ============================================================
-API_KEY = os.getenv("OPENAI_API_KEY", "sk-yNyTirSEdC8TJ7RO4DOvBVnrRjZ05ozWOmuEOKJZu2JArxpITtkhN9pUzlZGtfMo")
+API_KEY = os.getenv("OPENAI_API_KEY", "sk-jvEg4M4o2eYqFNkefEhpZrP4NpyRn3r56P2NjVrpdVejKbOq1Bmk1xL3eV08oqMV")
 BASE_URL = os.getenv("OPENAI_BASE_URL", "https://opencode.ai/zen/go/v1")
 MODEL = "deepseek-v4-flash"
 TOP_K = 10
 EMBED_MODEL = "facebook/contriever"
-MAX_SAMPLES_PER_DATASET = 50  # Use 50 for quick eval; paper uses 500
+MAX_SAMPLES_PER_DATASET = 30  # Use 30 for quick eval; paper uses 500
 
 # ============================================================
 # 1. Load contriever model
@@ -133,7 +133,7 @@ Answer:"""
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
-            max_tokens=100,
+            max_tokens=2000,
         )
         return rsp.choices[0].message.content.strip()
     except Exception as e:

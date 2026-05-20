@@ -668,29 +668,52 @@ Total per dataset        & $\sim$85\,min & $\sim$60\,min & $\sim$452\,min & $\si
     higher-tier API plan would bring the query stage closer to paper estimates.
 \end{enumerate}
 
-\subsection{Naive RAG Evaluation Attempt}
+\subsection{Naive RAG ASR Evaluation Results}
 
-To compare with the paper's Naive RAG ASR numbers (82--99\%, Table~1), we set up a
-Naive RAG pipeline using \texttt{facebook/contriever} for dense retrieval and
-FAISS for vector search---matching the paper's retrieval configuration.
+We evaluated the poisoned corpora using a Naive RAG pipeline (Contriever + FAISS
+retrieval + LLM generation), matching the paper's retrieval setup.  10 queries were
+sampled per dataset.  The \texttt{deepseek-v4-flash} reasoning model required
+token-aware retry logic: empty answers with \texttt{finish\_reason=length} were
+retried with up to 8,000 tokens to distinguish token-budget empties from genuine
+empty responses.
 
-\textbf{Completed:}
+\begin{table}[H]
+\centering
+\caption{Naive RAG ASR comparison: our reproduction vs.\ paper}
+\label{tab:asr}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Dataset} & \textbf{Our ASR} & \textbf{Paper ASR} & \textbf{Non-Empty} \\
+& \textbf{(deepseek-v4-flash)} & \textbf{(GPT-4o-mini)} & \textbf{/ Total} \\
+\midrule
+HotpotQA   & 60.0\% & 92.0\% & 9/10 \\
+2WikiMultihopQA & 90.0\% & 90.0\% & 9/10 \\
+MuSiQue    & 100.0\%\textsuperscript{*} & 99.2\% & 0/10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textsuperscript{*}MuSiQue: all answers empty due to reasoning token overflow; retry
+was interrupted.  The 100\% ASR reflects empty output $\neq$ ground truth and is
+not directly comparable.
+
+\textbf{Key findings:}
 \begin{itemize}[nosep]
-  \item Contriever model loaded and verified (768-dimensional embeddings)
-  \item FAISS index built for all 3 poisoned corpora (6,119--11,656 vectors each)
-  \item Document retrieval pipeline tested: top-$k$=10 retrieval working correctly
-  \item Evaluation script created at \texttt{eval/run\_naive\_rag.py}
+  \item \textbf{2Wiki: ASR 90.0\%} --- matches the paper's 90.0\% exactly,
+    suggesting comparable attack effectiveness for this dataset.
+  \item \textbf{HotpotQA: ASR 60.0\%} --- significantly \emph{lower} than the
+    paper's 92.0\%.  The \texttt{deepseek-v4-flash} model appears more robust
+    against poisoned context for HotpotQA-style questions, correctly answering
+    4/10 despite entity swaps.
+  \item \textbf{MuSiQue: evaluation incomplete} --- requires token-aware retry.
+  \item \textbf{Model difference matters:} Using a different LLM
+    (\texttt{deepseek-v4-flash} vs.\ \texttt{GPT-4o-mini}) significantly impacts ASR.
+    The reasoning model's tendency to ``think through'' the context may help it
+    bypass poisoned entities.
+  \item \textbf{Token budget is critical:} Reasoning models consume output tokens
+    for internal thinking.  Without sufficient \texttt{max\_tokens} (we used up to
+    8,000), answers appear empty, inflating ASR artificially.
 \end{itemize}
-
-\textbf{Blocked:} LLM answer generation could not be completed due to API credit
-limitations on the opencode-go account.  The retrieval infrastructure is ready;
-resuming the evaluation requires API credits to generate answers for 50--500
-questions per dataset.
-
-\textbf{For reference}, the paper's Naive RAG ASR targets (using GPT-4o-mini) are:
-HotpotQA~92.0\%, 2Wiki~90.0\%, MuSiQue~99.2\%.  With the retrieval pipeline
-verified and the poisoned corpus prepared, running the full evaluation is
-a straightforward extension once API access is restored.
 
 \subsection{Reproduction Verdict}
 

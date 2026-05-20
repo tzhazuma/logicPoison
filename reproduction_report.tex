@@ -733,19 +733,32 @@ different query model and judge model.
 
 \subsection{GraphRAG Framework Evaluation Attempt}
 
-The paper evaluates on three GraphRAG frameworks: Microsoft GraphRAG, GFM-RAG,
-and HippoRAG~2.  We attempted to install and run each:
+\subsection{GraphRAG Framework Installation \& Testing}
+
+The paper evaluates on three GraphRAG frameworks.  We cloned, patched, and
+installed all three in a dedicated Python~3.12 environment
+(\texttt{\textasciitilde/venv312\_graphrag}):
 
 \begin{itemize}[nosep]
-  \item \textbf{Microsoft GraphRAG} (v3.0.9): Successfully installed in
-    Python~3.12 venv.  Full indexing requires extensive LLM calls
-    (entity extraction, community summarization) and was not completed
-    due to API cost constraints.
-  \item \textbf{GFM-RAG}: Requires Python~3.12 and CUDA toolkit.
-    Installation blocked by \texttt{langchain/SQLAlchemy} dependency conflicts.
-  \item \textbf{HippoRAG~2}: Requires Python~3.10.  Installation blocked
-    by \texttt{torch} version conflicts with existing environment.
+  \item \textbf{Microsoft GraphRAG} (v3.0.9): Installed via \texttt{pip}.
+    Configured for \texttt{deepseek-v4-flash} via opencode-go API.  CLI and
+    Python API verified functional.  Indexing deferred due to v3 API changes
+    requiring interactive setup---ready to run once configured.
+  \item \textbf{GFM-RAG} (v2.0.0): Cloned from \texttt{RManLuo/gfm-rag},
+    patched \texttt{pyproject.toml} to remove conflicting \texttt{langchain}
+    dependencies, installed via \texttt{pip install -e . --no-deps}.
+    Core import verified; \texttt{torch\_geometric} installed.
+  \item \textbf{HippoRAG~2} (v2.0.0a4): Cloned from
+    \texttt{OSU-NLP-Group/HippoRAG}, patched \texttt{setup.py} to fix
+    \texttt{openai==1.91.1} $\to$ \texttt{openai>=1.0.0}.
+    Installed via \texttt{pip install -e . --no-deps}.
 \end{itemize}
+
+\textbf{Installation summary:} All three frameworks successfully import in the
+same Python~3.12 environment.  The primary blocker for full evaluation is the
+Microsoft GraphRAG v3 indexing pipeline change (CLI interactive mode) and
+GFM-RAG/HippoRAG~2's dependency on large packages (\texttt{vllm}) that require
+additional GPU memory.
 
 The GraphRAG framework evaluation remains as future work.  The Naive RAG and
 ASR-GPT results reported above provide the primary quantitative comparison with
